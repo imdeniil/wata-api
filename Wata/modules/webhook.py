@@ -91,7 +91,7 @@ class WebhookModule(BaseComponent):
     async def process_webhook(self, signature, data):
         """
         Обработка вебхука с проверкой подписи.
-       
+    
         :param signature: Подпись из заголовка X-Signature
         :param data: Данные вебхука (JSON в виде строки)
         :return: Обработанные данные вебхука или None, если подпись неверна
@@ -101,14 +101,39 @@ class WebhookModule(BaseComponent):
         if not await self.verify_signature(signature, data):
             self.logger.warning("Получен вебхук с недействительной подписью")
             raise ValueError("Недействительная подпись вебхука")
-       
+    
         # Если подпись верна, обрабатываем данные
         webhook_data = json.loads(data)
-       
-        self.logger.info(f"Получен вебхук: "
-                     f"orderId={webhook_data.get('orderId')}, "
-                     f"transactionId={webhook_data.get('transactionId')}, "
-                     f"status={webhook_data.get('transactionStatus')}")
-       
+    
+        # Минимальная информация для info-уровня - только самое необходимое
+        self.logger.info(
+            f"Получен вебхук: "
+            f"orderId={webhook_data.get('orderId')}, "
+            f"transactionId={webhook_data.get('transactionId')}, "
+            f"status={webhook_data.get('transactionStatus')}"
+        )
+        
+        # Полная информация для debug-уровня
+        self.logger.debug(
+            f"Детали вебхука {webhook_data.get('transactionId')}: "
+            f"transactionType={webhook_data.get('transactionType')}, "
+            f"errorCode={webhook_data.get('errorCode')}, "
+            f"errorDescription={webhook_data.get('errorDescription')}, "
+            f"terminalName={webhook_data.get('terminalName')}, "
+            f"amount={webhook_data.get('amount')} {webhook_data.get('currency')}, "
+            f"orderDescription={webhook_data.get('orderDescription')}, "
+            f"paymentTime={webhook_data.get('paymentTime')}, "
+            f"commission={webhook_data.get('commission')}, "
+            f"email={webhook_data.get('email')}"
+        )
+        
+        # Отдельное логирование при наличии ошибок (для любого уровня логирования)
+        if webhook_data.get('errorCode') or webhook_data.get('errorDescription'):
+            self.logger.warning(
+                f"Ошибка в транзакции {webhook_data.get('transactionId')}: "
+                f"код={webhook_data.get('errorCode')}, "
+                f"описание={webhook_data.get('errorDescription')}"
+            )
+    
         # Возвращаем данные вебхука
         return webhook_data
