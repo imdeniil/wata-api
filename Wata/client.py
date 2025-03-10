@@ -7,12 +7,44 @@ from .modules.webhook import WebhookModule
 from .logger import BaseComponent
 import logging
 
-class PaymentClient(BaseComponent):
+class AutoSingletonMeta(type):
+    """
+    Метакласс для автоматического получения или создания экземпляра при вызове методов.
+    """
+    def __getattr__(cls, name):
+        """
+        Вызывается, когда атрибут не найден в классе.
+        Пытается найти атрибут в экземпляре.
+        """
+        # Получаем или создаем экземпляр
+        try:
+            instance = cls.get_instance()
+        except ValueError as e:
+            raise AttributeError(f"Атрибут '{name}' не найден. Для доступа к методам экземпляра необходимо инициализировать клиент: {str(e)}")
+        
+        # Проверяем, есть ли атрибут в экземпляре
+        if hasattr(instance, name):
+            attr = getattr(instance, name)
+            
+            # Если это метод, возвращаем функцию, которая вызывает его на экземпляре
+            if callable(attr):
+                def method_proxy(*args, **kwargs):
+                    return attr(*args, **kwargs)
+                return method_proxy
+            else:
+                # Если это не метод, просто возвращаем атрибут
+                return attr
+        else:
+            raise AttributeError(f"Атрибут '{name}' не найден ни в классе, ни в экземпляре")
+
+class PaymentClient(BaseComponent, metaclass=AutoSingletonMeta):
     """
     Основной клиент для работы с платежным API.
-    Реализует паттерн Singleton для однократной инициализации.
+    Реализует паттерн Singleton для однократной инициализации с автоматическим
+    получением экземпляра при вызове методов.
     """
     _instance = None
+    _init_params = None
    
     @classmethod
     def initialize(cls, api_key, base_url, base_logger_name="wata_api", log_level=logging.INFO, **kwargs):
@@ -25,6 +57,17 @@ class PaymentClient(BaseComponent):
         :param log_level: Уровень логирования (по умолчанию INFO)
         :param kwargs: Дополнительные параметры для HTTP-клиента
         """
+        # Сохраняем параметры инициализации
+        cls._init_params = {
+            'api_key': api_key,
+            'base_url': base_url,
+            'component_name': "client",
+            'parent_logger_name': None,
+            'base_logger_name': base_logger_name,
+            'log_level': log_level,
+            **kwargs
+        }
+        
         if cls._instance is None:
             cls._instance = cls(
                 api_key=api_key,
@@ -41,9 +84,16 @@ class PaymentClient(BaseComponent):
     def get_instance(cls):
         """
         Получение существующего экземпляра клиента.
+        Если экземпляр не существует, но есть параметры инициализации,
+        создает новый экземпляр.
         """
         if cls._instance is None:
-            raise ValueError("Клиент не инициализирован. Используйте метод initialize().")
+            if cls._init_params:
+                # Если есть сохраненные параметры, создаем экземпляр
+                params = cls._init_params.copy()
+                cls._instance = cls(**params)
+            else:
+                raise ValueError("Клиент не инициализирован. Используйте метод initialize() с необходимыми параметрами.")
         return cls._instance
    
     def __init__(self, api_key, base_url, component_name="client",
@@ -51,8 +101,11 @@ class PaymentClient(BaseComponent):
                 log_level=logging.INFO, **kwargs):
         """
         Конструктор клиента.
-        Не следует вызывать напрямую, используйте метод initialize().
         """
+        # Проверяем обязательные параметры
+        if not api_key or not base_url:
+            raise ValueError("Для инициализации клиента необходимы параметры api_key и base_url.")
+            
         # Инициализация базового компонента для настройки логгера
         super().__init__(
             component_name=component_name,
