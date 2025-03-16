@@ -60,7 +60,7 @@ class PaymentClient(BaseComponent, metaclass=AutoSingletonMeta):
         # Сохраняем параметры инициализации
         cls._init_params = {
             'api_key': api_key,
-            'base_url': base_url,
+            'base_url': base_url or "https://api.wata.pro/",
             'component_name': "client",
             'parent_logger_name': None,
             'base_logger_name': base_logger_name,
