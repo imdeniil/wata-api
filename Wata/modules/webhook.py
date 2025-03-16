@@ -39,21 +39,22 @@ class WebhookModule(BaseComponent):
     async def get_public_key(self, force_refresh=False):
         """
         Получение публичного ключа для проверки подписи вебхуков.
-       
+    
         :param force_refresh: Принудительное обновление ключа из API
         :return: Публичный ключ в формате PEM
         """
         if self._public_key is None or force_refresh:
             self.logger.debug("Запрос публичного ключа для проверки вебхуков")
             response = await self._http_client.get("api/h2h/public-key")
-           
-            if 'value' in response:
+        
+            if isinstance(response, dict) and 'value' in response:
+                # Сохраняем именно строку с ключом, а не весь словарь
                 self._public_key = response['value']
                 self.logger.debug("Публичный ключ для проверки вебхуков получен")
             else:
                 self.logger.error("Ошибка при получении публичного ключа: ответ не содержит поле 'value'")
                 raise ValueError("Ответ API не содержит публичный ключ")
-               
+            
         return self._public_key
         
     async def verify_signature(self, signature, data):
