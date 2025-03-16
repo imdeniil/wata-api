@@ -75,7 +75,7 @@ class WebhookModule(BaseComponent):
         :return: True, если подпись верна, False в противном случае
         """
         try:
-            self.logger.debug(f"Начало проверки подписи вебхука, подпись: {signature[:20]}..., данные: {data[:30]}...")
+            self.logger.debug(f"Начало проверки подписи вебхука, подпись: {signature[:20] if isinstance(signature, str) else signature}, данные: {data[:30] if isinstance(data, str) else data}")
             
             # Получение публичного ключа
             public_key_pem = await self.get_public_key()
@@ -132,7 +132,7 @@ class WebhookModule(BaseComponent):
         :return: Обработанные данные вебхука или None, если подпись неверна
         :raises ValueError: Если подпись недействительна
         """
-        self.logger.debug(f"Начало обработки вебхука: подпись={signature[:20]}..., данные={data[:30]}...")
+        self.logger.debug(f"Начало обработки вебхука: подпись={signature[:20] if isinstance(signature, str) else signature}..., данные={data[:30] if isinstance(data, str) else data}")
         
         # Проверяем подпись
         signature_valid = await self.verify_signature(signature, data)
