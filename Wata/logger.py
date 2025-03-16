@@ -20,6 +20,8 @@ def setup_logger(name="wata", level=logging.INFO):
         logger.addHandler(handler)
    
     logger.setLevel(level)
+    # Отключаем распространение логов к родительским логгерам
+    logger.propagate = False
     return logger
 
 class BaseComponent:
