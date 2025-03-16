@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="wata-api",
-    version="0.1.6",
+    version="0.1.7",
     author="Павлючик Даниил",
     author_email="keemor821@gmail.com",
     description="Асинхронный клиент для работы с платежным API",
