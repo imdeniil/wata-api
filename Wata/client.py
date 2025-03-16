@@ -47,20 +47,24 @@ class PaymentClient(BaseComponent, metaclass=AutoSingletonMeta):
     _init_params = None
    
     @classmethod
-    def initialize(cls, api_key, base_url, base_logger_name="wata_api", log_level=logging.INFO, **kwargs):
+    def initialize(cls, api_key, base_url=None, base_logger_name="wata_api", log_level=logging.INFO, **kwargs):
         """
         Инициализация клиента с заданными параметрами.
        
         :param api_key: Ключ API для авторизации
-        :param base_url: Базовый URL API
+        :param base_url: Базовый URL API (по умолчанию "https://api.wata.pro/")
         :param base_logger_name: Базовое имя логгера (по умолчанию "wata_api")
         :param log_level: Уровень логирования (по умолчанию INFO)
         :param kwargs: Дополнительные параметры для HTTP-клиента
         """
+        # Устанавливаем URL по умолчанию, если не передан
+        if base_url is None:
+            base_url = "https://api.wata.pro/"
+            
         # Сохраняем параметры инициализации
         cls._init_params = {
             'api_key': api_key,
-            'base_url': base_url or "https://api.wata.pro/",
+            'base_url': base_url,
             'component_name': "client",
             'parent_logger_name': None,
             'base_logger_name': base_logger_name,
@@ -96,15 +100,19 @@ class PaymentClient(BaseComponent, metaclass=AutoSingletonMeta):
                 raise ValueError("Клиент не инициализирован. Используйте метод initialize() с необходимыми параметрами.")
         return cls._instance
    
-    def __init__(self, api_key, base_url, component_name="client",
+    def __init__(self, api_key, base_url=None, component_name="client",
                 parent_logger_name=None, base_logger_name="wata_api",
                 log_level=logging.INFO, **kwargs):
         """
         Конструктор клиента.
         """
+        # Устанавливаем URL по умолчанию, если не передан
+        if base_url is None:
+            base_url = "https://api.wata.pro/"
+            
         # Проверяем обязательные параметры
-        if not api_key or not base_url:
-            raise ValueError("Для инициализации клиента необходимы параметры api_key и base_url.")
+        if not api_key:
+            raise ValueError("Для инициализации клиента необходим параметр api_key.")
             
         # Инициализация базового компонента для настройки логгера
         super().__init__(
