@@ -3,7 +3,7 @@ import aiohttp
 import logging
 from typing import Dict, Any, Optional
 
-from .exceptions import ApiError, ApiTimeoutError, ApiConnectionError
+from .exceptions import ApiError, ApiTimeoutError, ApiConnectionError, ApiParsingError
 
 class AsyncHttpClient:
     """HTTP клиент с использованием aiohttp и JWT аутентификацией"""
@@ -106,37 +106,77 @@ class AsyncHttpClient:
     
     async def _process_response(self, response):
         """
-        Обработка ответа от API
+        Обработка ответа от API с использованием расширенной типизации ошибок
         
         :param response: Объект ответа aiohttp
         :return: Обработанный объект ответа
-        :raises ApiError: Если произошла ошибка API
+        :raises ApiError: Если произошла ошибка API (различные подклассы)
         """
         try:
             # Проверяем статус ответа
             if 200 <= response.status < 300:
                 # Пытаемся прочитать тело ответа как JSON
                 try:
-                    data = await response.json()
-                except ValueError:
-                    # Если ответ не JSON, читаем как текст
-                    data = await response.text()
-                    self.logger.warning(f"Ответ не в формате JSON: {data[:100]}...")
+                    content_type = response.headers.get('Content-Type', '')
+                    if 'application/json' in content_type:
+                        data = await response.json()
+                    else:
+                        # Если ответ не JSON, читаем как текст
+                        data = await response.text()
+                        if not data.strip():  # Если пустой ответ
+                            data = {}  # Возвращаем пустой словарь
+                        else:
+                            self.logger.warning(f"Ответ не в формате JSON: {data[:100]}...")
+                except ValueError as e:
+                    # Ошибка при разборе JSON
+                    self.logger.error(f"Ошибка при разборе JSON: {str(e)}")
+                    text = await response.text()
+                    raise ApiParsingError(f"Ошибка парсинга JSON: {str(e)}", e)
             else:
+                # Получаем детали ошибки
+                error_data = None
+                error_message = f"Ошибка {response.status}"
+                
                 # Пытаемся получить детали ошибки
                 try:
-                    error_data = await response.json()
-                except ValueError:
-                    error_data = await response.text()
-                
-                # Формируем сообщение об ошибке без повторения кода статуса
-                if isinstance(error_data, dict) and 'message' in error_data:
-                    error_message = error_data.get('message')
-                else:
-                    error_message = f"Ошибка {response.status}"
+                    content_type = response.headers.get('Content-Type', '')
+                    if 'application/json' in content_type:
+                        error_data = await response.json()
+                        # Извлекаем сообщение об ошибке из разных форматов ответа
+                        if isinstance(error_data, dict):
+                            error_message = error_data.get('message') or error_data.get('error') or error_message
+                            
+                            # Проверяем дополнительные поля с сообщениями об ошибках
+                            additional_message = None
+                            if 'errorDescription' in error_data:
+                                additional_message = error_data['errorDescription']
+                            elif 'description' in error_data:
+                                additional_message = error_data['description']
+                            elif 'detail' in error_data:
+                                additional_message = error_data['detail']
+                                
+                            # Добавляем детали к основному сообщению
+                            if additional_message and additional_message != error_message:
+                                error_message = f"{error_message}: {additional_message}"
+                    else:
+                        # Если не JSON, пытаемся прочитать как текст
+                        error_text = await response.text()
+                        if error_text.strip():
+                            error_data = error_text
+                            # Используем первые 100 символов текста как сообщение об ошибке
+                            if len(error_text) > 100:
+                                error_message = f"{error_text[:100]}..."
+                            else:
+                                error_message = error_text
+                except Exception as e:
+                    self.logger.warning(f"Не удалось получить детали ошибки: {str(e)}")
                     
+                # Логируем ошибку
                 self.logger.error(f"API вернул ошибку: {error_message}")
-                raise ApiError(response.status, error_message, error_data)
+                
+                # Создаем и выбрасываем соответствующее исключение в зависимости от кода статуса
+                from .exceptions import create_api_error
+                raise create_api_error(response.status, error_message, error_data)
             
             # Создаем объект ответа с атрибутом data
             class Response:
@@ -144,6 +184,7 @@ class AsyncHttpClient:
                     self.data = data
                     self.status = status
                     self.headers = headers
+                    self.content_type = headers.get('Content-Type') if headers else None
             
             return Response(data, response.status, dict(response.headers))
             
@@ -155,7 +196,12 @@ class AsyncHttpClient:
             self.logger.error(f"Ошибка при обработке ответа: {str(e)}")
             import traceback
             self.logger.debug(f"Стек вызовов: {traceback.format_exc()}")
-            raise ApiError(0, f"Ошибка при обработке ответа: {str(e)}")
+            
+            # Используем более специфичные исключения где возможно
+            if isinstance(e, ValueError) and "JSON" in str(e):
+                raise ApiParsingError(f"Ошибка парсинга JSON: {str(e)}", e)
+            else:
+                raise ApiError(0, f"Ошибка при обработке ответа: {str(e)}")
     
     async def _execute_with_retry(self, request_func):
         """
