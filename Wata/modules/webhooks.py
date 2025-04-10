@@ -1,42 +1,19 @@
-"""
-Модуль для работы с вебхуками платежного API.
-"""
-import base64
 import json
-import logging
+import base64
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
-from ..logger import BaseComponent
+from .base import BaseApiModule
 
-class WebhookModule(BaseComponent):
-    """
-    Модуль для работы с вебхуками платежного API.
-    """
-    def __init__(self, http_client, component_name="webhook", parent_logger_name=None, 
-                 base_logger_name="wata_api", log_level=logging.INFO):
-        """
-        Инициализация модуля вебхуков.
-       
-        :param http_client: HTTP-клиент для выполнения запросов
-        :param component_name: Имя компонента
-        :param parent_logger_name: Имя родительского логгера
-        :param base_logger_name: Базовое имя логгера (используется только если parent_logger_name не указан)
-        :param log_level: Уровень логирования
-        """
-        # Инициализация базового компонента для настройки логгера
-        super().__init__(
-            component_name=component_name,
-            parent_logger_name=parent_logger_name,
-            base_logger_name=base_logger_name,
-            log_level=log_level
-        )
-        
-        self._http_client = http_client
+class WebhookModule(BaseApiModule):
+    """Модуль для работы с вебхуками"""
+
+    def __init__(self, http_client, logger=None):
+        super().__init__(http_client, logger)
         self._public_key = None
-        self.logger.debug("WebhookModule инициализирован")
-        
+
     async def get_public_key(self, force_refresh=False):
         """
         Получение публичного ключа для проверки подписи вебхуков.
@@ -52,13 +29,13 @@ class WebhookModule(BaseComponent):
             
             self.logger.debug(f"Получен ответ от API: тип={type(response)}, содержимое={response}")
         
-            if isinstance(response, dict) and 'value' in response:
+            if isinstance(response.data, dict) and 'value' in response.data:
                 # Сохраняем именно строку с ключом, а не весь словарь
-                self._public_key = response['value']
+                self._public_key = response.data['value']
                 self.logger.debug(f"Публичный ключ для проверки вебхуков получен, тип={type(self._public_key)}")
                 self.logger.debug(f"Значение ключа: {self._public_key[:30]}...")  # Логируем начало ключа
             else:
-                self.logger.error(f"Ошибка при получении публичного ключа: ответ не содержит поле 'value'. Ответ: {response}")
+                self.logger.error(f"Ошибка при получении публичного ключа: ответ не содержит поле 'value'. Ответ: {response.data}")
                 raise ValueError("Ответ API не содержит публичный ключ")
         else:
             self.logger.debug("Используется кэшированный публичный ключ")

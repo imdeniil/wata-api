@@ -1,10 +1,18 @@
-# ./__init__.py
-
-"""
-Асинхронный модуль для работы с платежным API.
-"""
-
 from .client import PaymentClient
-from .exceptions import ApiError
+from .exceptions import ApiError, ApiConnectionError, ApiTimeoutError
 
-__all__ = ['PaymentClient', 'ApiError']
+__all__ = [
+    # Базовые классы
+    'PaymentClient'
+    
+    # К
+    'JwtHttpClient',
+    'OAuth2HttpClient',
+    'AsyncJwtHttpClient',
+    'AsyncOAuth2HttpClient',
+    
+    # Вспомогательные классы и функции
+    'AuthType',
+    'Response',
+    'create_http_client',
+]

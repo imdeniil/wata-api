@@ -1,9 +1,3 @@
-# ./modules/__init__.py
+from .payments import ExampleModule
 
-"""
-Модули для различных операций с API.
-"""
-from .payment import PaymentModule
-from .webhook import WebhookModule
-
-__all__ = ['PaymentModule', 'WebhookModule']
+__all__ = ['ExampleModule']

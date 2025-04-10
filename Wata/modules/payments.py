@@ -1,40 +1,14 @@
-"""
-Модуль для работы с платежами.
-"""
-
 import decimal
+from typing import Dict, Any, Union, Optional, List
 from datetime import datetime
-from typing import Optional, Dict, Any, Union, List
-import logging
 
-from ..exceptions import ApiError
-from ..logger import BaseComponent
+from .base import BaseApiModule
 
-class PaymentModule(BaseComponent):
-    """
-    Модуль для работы с платежами.
-    """
+class PaymentsModule(BaseApiModule):
+    """Модуль для работы с платежами"""
     
-    def __init__(self, http_client, component_name="payment", parent_logger_name=None, 
-                 base_logger_name="wata_api", log_level=logging.INFO):
-        """
-        Инициализация модуля.
-        
-        :param http_client: HTTP-клиент для выполнения запросов
-        :param component_name: Имя компонента
-        :param parent_logger_name: Имя родительского логгера
-        :param base_logger_name: Базовое имя логгера (используется только если parent_logger_name не указан)
-        :param log_level: Уровень логирования
-        """
-        # Инициализация базового компонента для настройки логгера
-        super().__init__(
-            component_name=component_name,
-            parent_logger_name=parent_logger_name,
-            base_logger_name=base_logger_name,
-            log_level=log_level
-        )
-        
-        self._http_client = http_client
+    def __init__(self, http_client, logger=None):
+        super().__init__(http_client, logger)
     
     async def create(
         self,
@@ -55,7 +29,6 @@ class PaymentModule(BaseComponent):
         :param success_redirect_url: URL для редиректа при успешной оплате
         :param fail_redirect_url: URL для редиректа при неуспешной оплате
         :return: Информация о созданном платеже
-        :raises ApiError: Если произошла ошибка при создании платежа
         """
         self.logger.info(f"Создание нового платежа на сумму {amount} {currency}")
         
@@ -85,22 +58,10 @@ class PaymentModule(BaseComponent):
         if fail_redirect_url:
             data["failRedirectUrl"] = fail_redirect_url
         
-        try:
-            # Отправляем запрос на создание платежа
-            result = await self._http_client.post("api/h2h/links", data=data)
-            self.logger.info(f"Платеж успешно создан")
-            return result
-        except ApiError as e:
-            # Обработка специфических ошибок платежей
-            if e.error_code == "Payment:PL_1001":
-                self.logger.error(f"Ошибка создания платежа: некорректная сумма {amount}")
-            elif e.error_code == "Payment:PL_1002":
-                self.logger.error(f"Ошибка создания платежа: неподдерживаемая валюта {currency}")
-            else:
-                self.logger.error(f"Ошибка создания платежа: {e}")
-            
-            # Пробрасываем исключение дальше
-            raise
+        # Отправляем запрос на создание платежа
+        result = await self._http_client.post("api/h2h/links", data=data)
+        self.logger.info(f"Платеж успешно создан")
+        return result.data
     
     async def get_link_by_uuid(self, uuid: str) -> Dict[str, Any]:
         """
@@ -108,20 +69,12 @@ class PaymentModule(BaseComponent):
         
         :param uuid: Идентификатор платежной ссылки (UUID)
         :return: Информация о платежной ссылке
-        :raises ApiError: Если произошла ошибка при получении платежной ссылки
         """
         self.logger.info(f"Получение платежной ссылки по UUID: {uuid}")
         
-        try:
-            result = await self._http_client.get(f"api/h2h/links/{uuid}")
-            self.logger.debug(f"Успешно получена информация о платежной ссылке {uuid}")
-            return result
-        except ApiError as e:
-            if e.error_code == "Payment:PL_1003":
-                self.logger.error(f"Платежная ссылка {uuid} недоступна или уже оплачена")
-            else:
-                self.logger.error(f"Ошибка получения платежной ссылки {uuid}: {e}")
-            raise
+        result = await self._http_client.get(f"api/h2h/links/{uuid}")
+        self.logger.debug(f"Успешно получена информация о платежной ссылке {uuid}")
+        return result.data
 
     async def search_links(
         self,
@@ -151,7 +104,6 @@ class PaymentModule(BaseComponent):
         :param skip_count: Количество записей, которые нужно пропустить (по умолчанию 0)
         :param max_result_count: Количество записей в ответе (по умолчанию 10, максимум 1000)
         :return: Список платежных ссылок и метаданные
-        :raises ApiError: Если произошла ошибка при поиске платежных ссылок
         """
         self.logger.info("Выполняется поиск платежных ссылок")
         
@@ -193,7 +145,7 @@ class PaymentModule(BaseComponent):
             params["currencies"] = currencies
         
         # Обработка параметров статусов
-        if statuses is not None:
+        if statuses is not None:    
             if isinstance(statuses, list):
                 statuses = ",".join(statuses)
             params["statuses"] = statuses
@@ -211,17 +163,13 @@ class PaymentModule(BaseComponent):
         
         self.logger.debug(f"Параметры поиска: {params}")
         
-        try:
-            # Выполняем запрос на поиск платежных ссылок
-            result = await self._http_client.get("api/h2h/links/", params=params)
-            
-            # Логирование результатов
-            if "items" in result:
-                self.logger.info(f"Найдено {len(result['items'])} платежных ссылок")
-            else:
-                self.logger.warning("API вернул ответ без элемента 'items'")
-            
-            return result
-        except ApiError as e:
-            self.logger.error(f"Ошибка при поиске платежных ссылок: {e}")
-            raise
+        # Выполняем запрос на поиск платежных ссылок
+        result = await self._http_client.get("api/h2h/links/", params=params)
+        
+        # Логирование результатов
+        if "items" in result.data:
+            self.logger.info(f"Найдено {len(result.data['items'])} платежных ссылок")
+        else:
+            self.logger.warning("API вернул ответ без элемента 'items'")
+        
+        return result.data
