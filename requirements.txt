@@ -3,5 +3,4 @@ requests
 setuptools
 build
 twine
-id-api
 cryptography
